@@ -1,0 +1,37 @@
+# AU 
+.kanónes/
+.vault/
+tools/
+AGENTS.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+
+# Packaging / build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Environments
+.venv/
+.python-version
+uv.lock
+
+# Git
+.gitmodules
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# IDEs
+.idea/
+.DS_Store

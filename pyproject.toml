@@ -1,0 +1,53 @@
+[project]
+name = "gemma3-text270m"
+version = "0.1.0"
+description = "Educational implementation scaffold of Gemma-3-270M with zero Transformers dependency"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Educational ML Team" }
+]
+keywords = ["LLM", "Gemma", "Transformer", "Education", "PyTorch"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "torch>=2.3.0",
+  "safetensors",
+  "huggingface_hub",
+  "sentencepiece",
+  "tokenizers",
+]
+
+[project.urls]
+Homepage = "https://github.com/"
+Repository = "https://github.com/"
+
+[tool.uv]
+# uv-specific settings placeholder
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+
+[tool.black]
+line-length = 100
+target-version = ["py39"]
+
+[tool.isort]
+profile = "black"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
