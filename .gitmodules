@@ -1,0 +1,3 @@
+[submodule "tools/Kanones"]
+	path = tools/Kanones
+	url = https://github.com/wtergan/Kanones.git
