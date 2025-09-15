@@ -13,16 +13,13 @@ Tensor shapes follow MQA (single KV head) defaults but are general:
 """
 
 from typing import Optional, Tuple
-
 import torch
-
 from .config import Gemma3TextConfig
 
 
 class KVCache:
-    """Abstract KV cache interface.
-
-    Subclasses must implement `append` and `get`.
+    """
+    Abstract KV cache interface. Subclasses must implement `reset`, `append`, and `get`.
     """
 
     def reset(self) -> None:  # pragma: no cover - interface
@@ -40,7 +37,8 @@ class KVCache:
 
 
 class RingBufferKVCache(KVCache):
-    """Ring-buffer KV cache for sliding-window attention layers.
+    """
+    Ring-buffer KV cache for sliding-window attention layers.
 
     Stores at most `capacity` tokens. Appends wrap around and overwrite the
     oldest entries. Retrieval returns keys/values in chronological order.
@@ -74,14 +72,22 @@ class RingBufferKVCache(KVCache):
             if self._bsz != bsz:
                 # Reallocate if batch size changes
                 self._bsz = bsz
-                self._k = torch.zeros((bsz, self.kvh, self._capacity, self.dh), device=self.device, dtype=self.dtype)
-                self._v = torch.zeros((bsz, self.kvh, self._capacity, self.dh), device=self.device, dtype=self.dtype)
+                self._k = torch.zeros(
+                    (bsz, self.kvh, self._capacity, self.dh), device=self.device, dtype=self.dtype
+                )
+                self._v = torch.zeros(
+                    (bsz, self.kvh, self._capacity, self.dh), device=self.device, dtype=self.dtype
+                )
                 self._pos = 0
                 self._size = 0
             return
         self._bsz = bsz
-        self._k = torch.zeros((bsz, self.kvh, self._capacity, self.dh), device=self.device, dtype=self.dtype)
-        self._v = torch.zeros((bsz, self.kvh, self._capacity, self.dh), device=self.device, dtype=self.dtype)
+        self._k = torch.zeros(
+            (bsz, self.kvh, self._capacity, self.dh), device=self.device, dtype=self.dtype
+        )
+        self._v = torch.zeros(
+            (bsz, self.kvh, self._capacity, self.dh), device=self.device, dtype=self.dtype
+        )
         self._pos = 0
         self._size = 0
         self._allocated = True
@@ -143,7 +149,8 @@ class RingBufferKVCache(KVCache):
 
 
 class FullSequenceKVCache(KVCache):
-    """Full sequence KV cache for global attention layers.
+    """
+    Full sequence KV cache for global attention layers.
 
     Stores the entire history by concatenating along the sequence length
     dimension. Simpler but with linear memory growth.
@@ -204,4 +211,3 @@ class FullSequenceKVCache(KVCache):
 
 
 __all__ = ["KVCache", "RingBufferKVCache", "FullSequenceKVCache"]
-

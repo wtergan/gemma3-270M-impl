@@ -26,8 +26,8 @@ from .config import Gemma3TextConfig
 
 
 class Gemma3MLP(nn.Module):
-    """SwiGLU-style MLP with GELU(tanh) activation.
-
+    """
+    SwiGLU-style MLP with GELU(tanh) activation.
     - gate_proj: Linear(D, FF, bias=False)
     - up_proj:   Linear(D, FF, bias=False)
     - down_proj: Linear(FF, D, bias=False)
@@ -43,21 +43,13 @@ class Gemma3MLP(nn.Module):
         self.down_proj = nn.Linear(d_ff, d_model, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Apply gated MLP.
-
-        Args:
-            x: [B, T, D]
-
-        Returns:
-            Tensor of shape [B, T, D]
-        """
-        gate = self.gate_proj(x)           # [B, T, FF]
-        up = self.up_proj(x)               # [B, T, FF]
+        """Apply gated MLP. Returns tensor of same shape as input (B, T, D)."""
+        gate = self.gate_proj(x)  # [B, T, FF]
+        up = self.up_proj(x)  # [B, T, FF]
         act = F.gelu(up, approximate="tanh")  # [B, T, FF]
-        hidden = gate * act                # [B, T, FF]
-        out = self.down_proj(hidden)       # [B, T, D]
+        hidden = gate * act  # [B, T, FF]
+        out = self.down_proj(hidden)  # [B, T, D]
         return out
 
 
 __all__ = ["Gemma3MLP"]
-

@@ -52,8 +52,8 @@ def _is_local_repo(path: str | Path) -> bool:
 
 
 def _detect_files(repo_or_path: str | Path) -> Tuple[Path, List[Path]]:
-    """Return (root_dir, list_of_safetensor_files). If remote, download snapshot.
-
+    """
+    Return (root_dir, list_of_safetensor_files). If remote, download snapshot.
     Raises RuntimeError if required files are not present or download tools missing.
     """
     if _is_local_repo(repo_or_path):
@@ -62,7 +62,9 @@ def _detect_files(repo_or_path: str | Path) -> Tuple[Path, List[Path]]:
         if snapshot_download is None:
             raise RuntimeError("huggingface_hub is required for remote repositories")
         # mirror to local cache; allow offline envs to skip
-        root = Path(snapshot_download(repo_id=str(repo_or_path), allow_patterns=["*.safetensors", "*.json"]))
+        root = Path(
+            snapshot_download(repo_id=str(repo_or_path), allow_patterns=["*.safetensors", "*.json"])
+        )
 
     # Prefer sharded files if index exists
     index_path = root / "model.safetensors.index.json"
@@ -94,6 +96,7 @@ def _load_safetensors(files: Iterable[Path]) -> Dict[str, torch.Tensor]:
         raise RuntimeError("safetensors is required to load weights")
     state: Dict[str, torch.Tensor] = {}
     for f in files:
+        # Loading the safetensors into torch format...
         shard = load_file(str(f))
         # merge; later shards can overwrite if duplicate (unlikely in proper index)
         for k, v in shard.items():
@@ -113,7 +116,13 @@ def _validate_shapes(model: Gemma3ForCausalLM, state: Mapping[str, torch.Tensor]
     return mismatches
 
 
-def load_weights_into(model: Gemma3ForCausalLM, repo_or_path: str | Path, *, strict: bool = False, device: Optional[torch.device] = None) -> LoadReport:
+def load_weights_into(
+    model: Gemma3ForCausalLM,
+    repo_or_path: str | Path,
+    *,
+    strict: bool = False,
+    device: Optional[torch.device] = None,
+) -> LoadReport:
     """Load HF safetensors into the given model.
 
     - repo_or_path: local dir with safetensors or HF repo id (e.g., 'google/gemma-3-270m')
@@ -138,7 +147,11 @@ def load_weights_into(model: Gemma3ForCausalLM, repo_or_path: str | Path, *, str
     unexpected = [k for k in weights.keys() if k not in model_state]
 
     # Apply intersection
-    intersect = {k: v for k, v in weights.items() if k in model_state and (tuple(model_state[k].shape) == tuple(v.shape))}
+    intersect = {
+        k: v
+        for k, v in weights.items()
+        if k in model_state and (tuple(model_state[k].shape) == tuple(v.shape))
+    }
     model.load_state_dict({**model_state, **intersect}, strict=False)
 
     return LoadReport(
@@ -146,10 +159,10 @@ def load_weights_into(model: Gemma3ForCausalLM, repo_or_path: str | Path, *, str
         files=[str(f) for f in files],
         loaded_tensors=len(intersect),
         missing_keys=missing,
-        unexpected_keys=unexpected + (["SHAPE_MISMATCH"] if shape_mismatches and not strict else []),
+        unexpected_keys=unexpected
+        + (["SHAPE_MISMATCH"] if shape_mismatches and not strict else []),
         total_params=sum(p.numel() for p in model.parameters()),
     )
 
 
 __all__ = ["load_weights_into", "LoadReport"]
-

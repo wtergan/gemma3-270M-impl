@@ -28,4 +28,3 @@ def test_block_residual_nontrivial_transform():
     assert y.shape == x.shape
     # With random weights it's unlikely to be exactly equal
     assert not torch.allclose(y, x)
-

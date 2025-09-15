@@ -73,4 +73,3 @@ def test_sentencepiece_missing_dependency_raises(tmp_path: Path, monkeypatch):
     # Loading should fail due to missing dependency
     with pytest.raises(ImportError):
         Gemma3Tokenizer.from_local_path(spm)
-

@@ -22,6 +22,15 @@ dependencies = [
   "tokenizers",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "black>=24.0",
+    "mypy>=1.0",
+    "pytest>=7.0",
+    "isort>=5.0",
+    "ruff>=0.1",
+]
+
 [project.urls]
 Homepage = "https://github.com/"
 Repository = "https://github.com/"
@@ -50,4 +59,10 @@ profile = "black"
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "mypy>=1.18.1",
+]
 

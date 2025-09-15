@@ -34,6 +34,7 @@ except ImportError:  # Python <3.8 typing backport not required here
 Backend = "Literal['sentencepiece','hf_tokenizers']"
 
 
+# --- Dynamic imports to avoid hard deps... ---
 def _import_sentencepiece():
     return importlib.import_module("sentencepiece")
 
@@ -46,6 +47,7 @@ def _import_hf_hub():
     return importlib.import_module("huggingface_hub")
 
 
+# --- File detection helpers, for HF tokenizers and spm respectively ---
 def _is_json_tokenizer_path(path: Path) -> bool:
     return path.is_file() and path.suffix == ".json"
 
@@ -55,8 +57,8 @@ def _is_spm_model_path(path: Path) -> bool:
 
 
 def _search_tokenizer_file(path: Path) -> Tuple[Optional[Path], Optional[str]]:
-    """Searches for a tokenizer file under `path` if `path` is a directory.
-
+    """
+    Searches for a tokenizer file under `path` if `path` is a directory.
     Returns (file_path, backend) if found; (None, None) otherwise.
     """
     if path.is_file():
@@ -79,7 +81,8 @@ def _search_tokenizer_file(path: Path) -> Tuple[Optional[Path], Optional[str]]:
 
 @dataclass
 class Gemma3Tokenizer:
-    """Unified tokenizer wrapper for Gemma-3 text models.
+    """
+    Unified tokenizer wrapper for Gemma-3 text models.
 
     Parameters
     - backend: Which backend is active (auto-detected when loading)
@@ -92,9 +95,9 @@ class Gemma3Tokenizer:
     eos_id: int = 1
     pad_id: int = 0
 
-    # Internal handles
+    # Internal handles to backend instances...
     _tok: object | None = None  # HF Tokenizers Tokenizer
-    _sp: object | None = None   # SentencePieceProcessor
+    _sp: object | None = None  # SentencePieceProcessor
 
     # ----- Construction helpers -----
     @staticmethod
@@ -121,8 +124,8 @@ class Gemma3Tokenizer:
         revision: Optional[str] = None,
         local_files_only: bool = False,
     ) -> "Gemma3Tokenizer":
-        """Load tokenizer files from a HuggingFace repository using hf_hub.
-
+        """
+        Load tokenizer files from a HuggingFace repository using hf_hub.
         This requires `huggingface_hub` and network access unless files are cached.
         """
         hub = _import_hf_hub()
@@ -221,4 +224,3 @@ class Gemma3Tokenizer:
     @property
     def special_tokens(self) -> dict:
         return {"pad": self.pad_id, "eos": self.eos_id, "bos": self.bos_id}
-

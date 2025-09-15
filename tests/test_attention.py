@@ -32,4 +32,3 @@ def test_rope_cache_apply_shapes():
     x = torch.randn(1, 4, cfg.hidden_size)
     y = attn(x)
     assert y.shape == (1, 4, cfg.hidden_size)
-

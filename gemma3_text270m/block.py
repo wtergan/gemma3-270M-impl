@@ -25,8 +25,8 @@ from .mlp import Gemma3MLP
 
 
 class RMSNorm(nn.Module):
-    """Root Mean Square LayerNorm variant.
-
+    """
+    Root Mean Square LayerNorm variant.
     y = x / rms(x) * weight, where rms(x) = sqrt(mean(x^2) + eps)
     """
 
@@ -68,4 +68,3 @@ class Gemma3Block(nn.Module):
 
 
 __all__ = ["Gemma3Block", "RMSNorm"]
-

@@ -42,4 +42,3 @@ def test_full_sequence_cache_concat():
     k, v = cache.get()
     assert k.shape == (B, K, 4, D)
     assert v.shape == (B, K, 4, D)
-

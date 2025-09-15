@@ -8,7 +8,8 @@ from pathlib import Path
 
 @dataclass
 class Gemma3TextConfig:
-    """Configuration for the Gemma-3-270M text model.
+    """
+    Configuration for the Gemma-3-270M text model.
 
     This configuration is intentionally locked to the 270M variant. Loading a
     mismatched configuration will raise a ValueError.
@@ -31,22 +32,30 @@ class Gemma3TextConfig:
     eos_token_id: int = 1
     pad_token_id: int = 0
 
-    # Attention/windowing defaults (used later by attention/KV cache)
-    sliding_window: int = 4096
+    # Context length (max sequence length supported by the model)
+    context_length: int = 32_768
 
-    # Rotary positional embeddings base (placeholder; may be adjusted later)
-    rope_theta: float = 10000.0
+    # Attention/windowing defaults (used later by attention/KV cache)
+    # Default sliding window follows Gemma-3-270M local attention spec
+    sliding_window: int = 512
+
+    # Rotary positional embeddings base values
+    # Global (full) attention uses a larger theta, local/sliding uses standard 10k
+    rope_theta: float = 1_000_000.0  # global
+    rope_local_theta: float = 10_000.0  # local/sliding
 
     # Misc metadata
     model_type: str = field(default="gemma3_text", init=False)
 
+    # Enforces exact locked spec on init... raising ValueError for any mismatches
     def __post_init__(self) -> None:
         self._validate_locked_spec()
 
     # --- HuggingFace loading helpers ---
     @classmethod
     def from_hf_dict(cls, data: Mapping[str, Any]) -> "Gemma3TextConfig":
-        """Create a config from a HuggingFace-style config.json mapping.
+        """
+        Create a config from a HuggingFace-style config.json mapping.
 
         Only keys relevant to this 270M variant are read; others are ignored.
         Validation ensures the loaded values match the locked specification.
@@ -70,11 +79,15 @@ class Gemma3TextConfig:
             if key in data:
                 kwargs[attr] = data[key]
 
-        # Optional window/rope keys
+        # Optional context/window/rope keys
+        if "context_length" in data:
+            kwargs["context_length"] = data["context_length"]
         if "sliding_window" in data:
             kwargs["sliding_window"] = data["sliding_window"]
         if "rope_theta" in data:
             kwargs["rope_theta"] = data["rope_theta"]
+        if "rope_local_theta" in data:
+            kwargs["rope_local_theta"] = data["rope_local_theta"]
 
         cfg = cls(**kwargs)  # __post_init__ enforces locked spec
         return cfg
@@ -88,7 +101,8 @@ class Gemma3TextConfig:
 
     # --- Validation ---
     def _validate_locked_spec(self) -> None:
-        """Ensure parameters match the 270M published specification.
+        """
+        Ensure parameters match the 270M published specification.
 
         This class is intentionally strict to avoid silent misuse with other
         Gemma-3 sizes. If you intend to support multiple sizes, factor this
@@ -119,3 +133,26 @@ class Gemma3TextConfig:
             if not isinstance(tok, int) or tok < 0:
                 raise ValueError(f"{tok_name} must be a non-negative int; got {tok!r}")
 
+        # Sanity checks for new configurable limits
+        if not isinstance(self.context_length, int) or self.context_length <= 0:
+            raise ValueError(
+                f"context_length must be a positive int; got {self.context_length!r}"
+            )
+        if not isinstance(self.sliding_window, int) or self.sliding_window <= 0:
+            raise ValueError(
+                f"sliding_window must be a positive int; got {self.sliding_window!r}"
+            )
+        if self.sliding_window > self.context_length:
+            raise ValueError(
+                "sliding_window cannot exceed context_length: "
+                f"{self.sliding_window} > {self.context_length}"
+            )
+        # RoPE bases sanity
+        if not (isinstance(self.rope_theta, (int, float)) and self.rope_theta > 0):
+            raise ValueError(f"rope_theta must be > 0; got {self.rope_theta!r}")
+        if not (
+            isinstance(self.rope_local_theta, (int, float)) and self.rope_local_theta > 0
+        ):
+            raise ValueError(
+                f"rope_local_theta must be > 0; got {self.rope_local_theta!r}"
+            )

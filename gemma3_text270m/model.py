@@ -19,6 +19,7 @@ from .block import Gemma3Block, RMSNorm
 def _layer_types_5to1(num_layers: int) -> list[str]:
     pattern = ["sliding_attention"] * 5 + ["full_attention"]
     out: list[str] = []
+    # Sees if there are enough to add full 6-layer pattern
     while len(out) + 6 <= num_layers:
         out.extend(pattern)
     # If not divisible by 6, pad with sliding then full as needed
@@ -37,16 +38,17 @@ class Gemma3ForCausalLM(nn.Module):
 
         self.embed_tokens = nn.Embedding(V, D)
         layer_types = _layer_types_5to1(L)
-        self.layers = nn.ModuleList([
-            Gemma3Block(config, layer_type=lt) for lt in layer_types
-        ])
+        self.layers = nn.ModuleList([Gemma3Block(config, layer_type=lt) for lt in layer_types])
         self.norm = RMSNorm(D)
         self.lm_head = nn.Linear(D, V, bias=False)
 
-        # Tie weights between embedding and LM head
+        # Tie weights b/w embedding and LM head... reduces params, improves sample efficiency in smaller models
         self.lm_head.weight = self.embed_tokens.weight
 
-    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None) -> torch.Tensor:
+    def forward(
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """embed --> blocks --> norm --> lm_head"""
         # input_ids: [B, T]
         x = self.embed_tokens(input_ids)  # [B, T, D]
         for layer in self.layers:
@@ -57,4 +59,3 @@ class Gemma3ForCausalLM(nn.Module):
 
 
 __all__ = ["Gemma3ForCausalLM"]
-

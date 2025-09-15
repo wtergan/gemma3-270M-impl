@@ -35,7 +35,6 @@ def _build_causal_mask(t_q: int, t_k: int, device: torch.device) -> torch.Tensor
 
 def _apply_sliding_window(mask: torch.Tensor, window: int) -> torch.Tensor:
     """Augment a causal mask to also mask tokens older than `window`.
-
     `mask` is additive [1,1,T,T] with -inf for disallowed positions.
     """
     b, h, t_q, t_k = mask.shape
@@ -49,20 +48,30 @@ def _apply_sliding_window(mask: torch.Tensor, window: int) -> torch.Tensor:
 
 
 def _rope_rotate_half(x: torch.Tensor) -> torch.Tensor:
+    """
+    Splits input tensor in half along the last dim, then concats the negated second half with the first half.
+    """
     x1, x2 = x[..., : x.shape[-1] // 2], x[..., x.shape[-1] // 2 :]
     return torch.cat([-x2, x1], dim=-1)
 
 
-def _build_rope_cache(seq_len: int, dim: int, base_theta: float, device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Return (cos, sin) with shape [1, 1, seq_len, dim]."""
-    # Use pairwise dims (half) for rotary; duplicate to full dim for efficiency
+def _build_rope_cache(
+    seq_len: int, dim: int, base_theta: float, device: torch.device
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Return (cos, sin) with shape [1, 1, seq_len, dim].
+    Uses pairwise dims (half) for rotary, then duplicates to full dim for efficiency.
+    """
+    assert dim % 2 == 0, "Embedding dim has to be even for RoPE computation...."
     half = dim // 2
-    inv_freq = 1.0 / (base_theta ** (torch.arange(0, half, device=device, dtype=torch.float32) / half))
-    t = torch.arange(seq_len, device=device, dtype=torch.float32)
-    freqs = torch.einsum("t,d->td", t, inv_freq)  # [T, half]
-    cos = freqs.cos().repeat_interleave(2, dim=-1)  # [T, dim]
+    inv_freq = 1.0 / (
+        base_theta ** (torch.arange(0, half, device=device, dtype=torch.float32) / half)
+    )
+    pos = torch.arange(seq_len, device=device, dtype=torch.float32)
+    freqs = torch.einsum("p,d->pd", pos, inv_freq)  # [seq_len, half]
+    cos = freqs.cos().repeat_interleave(2, dim=-1)  # [seq_len, dim]
     sin = freqs.sin().repeat_interleave(2, dim=-1)
-    cos = cos.unsqueeze(0).unsqueeze(0)  # [1,1,T,dim]
+    cos = cos.unsqueeze(0).unsqueeze(0)  # [1,1,seq_len,dim]
     sin = sin.unsqueeze(0).unsqueeze(0)
     return cos, sin
 
@@ -85,14 +94,14 @@ class _MQAParams:
 class _MultiQueryAttentionBase(nn.Module):
     """Base MQA with RoPE and causal/sliding masks; projects back to hidden_size."""
 
-    def __init__(self, config: Gemma3TextConfig, sliding_window: Optional[int]):
+    def __init__(self, config: Gemma3TextConfig, sliding_window: Optional[int], *, rope_theta: float):
         super().__init__()
         self.params = _MQAParams(
             num_heads=config.num_attention_heads,
             num_kv=config.num_key_value_heads,
             head_dim=config.head_dim,
             hidden_size=config.hidden_size,
-            query_pre_attn_scalar=config.head_dim ** -0.5,
+            query_pre_attn_scalar=config.head_dim**-0.5,
             sliding_window=sliding_window,
         )
         H, K, D, HS = (
@@ -102,15 +111,16 @@ class _MultiQueryAttentionBase(nn.Module):
             self.params.hidden_size,
         )
 
-        # Projections
+        # Projections for Q, K, V, O respectively... no biases.
         self.q_proj = nn.Linear(HS, H * D, bias=False)
         self.k_proj = nn.Linear(HS, K * D, bias=False)
         self.v_proj = nn.Linear(HS, K * D, bias=False)
         self.o_proj = nn.Linear(H * D, HS, bias=False)
 
-        self.rope_theta = config.rope_theta
+        # Select RoPE base per attention type (passed by subclass)
+        self.rope_theta = float(rope_theta)
 
-    # Friendly aliases for tests/printing
+    # Friendly aliases for tests/printing...
     @property
     def num_heads(self) -> int:
         return self.params.num_heads
@@ -124,6 +134,7 @@ class _MultiQueryAttentionBase(nn.Module):
         return self.params.head_dim
 
     def _make_mask(self, t_q: int, t_k: int, device: torch.device) -> torch.Tensor:
+        """The appropriate causal/sliding window mask for given lengths."""
         mask = _build_causal_mask(t_q, t_k, device)
         if self.params.sliding_window is not None:
             win = int(self.params.sliding_window)
@@ -138,7 +149,7 @@ class _MultiQueryAttentionBase(nn.Module):
         B, T, HS = x.shape
         H, K, D = self.params.num_heads, self.params.num_kv, self.params.head_dim
 
-        # Project
+        # Projection applications on x...
         q = self.q_proj(x).view(B, T, H, D)
         k = self.k_proj(x).view(B, T, K, D)
         v = self.v_proj(x).view(B, T, K, D)
@@ -182,7 +193,8 @@ class GlobalAttention(_MultiQueryAttentionBase):
     """Full causal attention (no sliding window)."""
 
     def __init__(self, config: Gemma3TextConfig):
-        super().__init__(config, sliding_window=None)
+        # Global attention uses the larger RoPE base
+        super().__init__(config, sliding_window=None, rope_theta=config.rope_theta)
 
 
 class SlidingWindowAttention(_MultiQueryAttentionBase):
@@ -191,11 +203,11 @@ class SlidingWindowAttention(_MultiQueryAttentionBase):
     def __init__(self, config: Gemma3TextConfig, window_size: Optional[int] = None):
         if window_size is None:
             window_size = int(config.sliding_window)
-        super().__init__(config, sliding_window=window_size)
+        # Sliding/local attention uses the local RoPE base (10k)
+        super().__init__(config, sliding_window=window_size, rope_theta=config.rope_local_theta)
 
 
 __all__ = [
     "GlobalAttention",
     "SlidingWindowAttention",
 ]
-

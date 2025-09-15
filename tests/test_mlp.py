@@ -36,4 +36,3 @@ def test_mlp_forward_random():
     x = torch.randn(1, 3, cfg.hidden_size)
     y = mlp(x)
     assert y.shape == x.shape
-

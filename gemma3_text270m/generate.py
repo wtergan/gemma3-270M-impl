@@ -19,7 +19,13 @@ from .model import Gemma3ForCausalLM
 from .tokenizer import Gemma3Tokenizer
 
 
-def _sample_logits(logits: torch.Tensor, *, temperature: float = 1.0, top_k: Optional[int] = None, top_p: Optional[float] = None) -> int:
+def _sample_logits(
+    logits: torch.Tensor,
+    *,
+    temperature: float = 1.0,
+    top_k: Optional[int] = None,
+    top_p: Optional[float] = None,
+) -> int:
     """Return next token id sampled from logits [V]. Greedy if temperature<=0."""
     if temperature is None or temperature <= 0:
         return int(torch.argmax(logits, dim=-1).item())
@@ -31,7 +37,7 @@ def _sample_logits(logits: torch.Tensor, *, temperature: float = 1.0, top_k: Opt
     if top_k is not None and top_k > 0:
         k = min(top_k, probs.numel())
         vals, idx = torch.topk(probs, k)
-        mask = torch.full_like(probs, float('-inf'))
+        mask = torch.full_like(probs, float("-inf"))
         mask[idx] = torch.log(vals)
         probs = F.softmax(mask, dim=-1)
 
@@ -43,7 +49,9 @@ def _sample_logits(logits: torch.Tensor, *, temperature: float = 1.0, top_k: Opt
         # Ensure at least one token kept
         if not torch.any(keep):
             keep[0] = True
-        filtered = torch.where(keep, torch.log(sorted_probs), torch.full_like(sorted_probs, float('-inf')))
+        filtered = torch.where(
+            keep, torch.log(sorted_probs), torch.full_like(sorted_probs, float("-inf"))
+        )
         probs = torch.zeros_like(probs)
         probs[sorted_idx] = F.softmax(filtered, dim=-1)
 
@@ -85,10 +93,20 @@ class Gemma3Generator:
             ids = [self.tokenizer.bos_id] + ids
             input_ids = torch.tensor(ids, dtype=torch.long, device=self.device).unsqueeze(0)  # [1, T]
 
+            # Enforce configured context length on initial prompt
+            ctx_len = int(getattr(self.model.config, "context_length", 32768))
+            if input_ids.shape[1] > ctx_len:
+                input_ids = input_ids[:, -ctx_len:]
+
             for _ in range(max_new_tokens):
+                # Ensure input never exceeds context_length during decode
+                if input_ids.shape[1] > ctx_len:
+                    input_ids = input_ids[:, -ctx_len:]
                 logits = self.model(input_ids)  # [1, T, V]
-                next_logits = logits[0, -1]     # [V]
-                next_id = _sample_logits(next_logits, temperature=temperature, top_k=top_k, top_p=top_p)
+                next_logits = logits[0, -1]  # [V]
+                next_id = _sample_logits(
+                    next_logits, temperature=temperature, top_k=top_k, top_p=top_p
+                )
                 input_ids = torch.cat([input_ids, torch.tensor([[next_id]], device=self.device)], dim=1)
 
                 if stop_at_eos and next_id == self.tokenizer.eos_id:
@@ -100,4 +118,3 @@ class Gemma3Generator:
             if stream_callback is not None:
                 stream_callback(text)
             return text
-

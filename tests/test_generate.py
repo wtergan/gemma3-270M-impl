@@ -11,4 +11,3 @@ def test_generator_constructs():
     gen = Gemma3Generator(model, tok)
     assert gen.model is model
     assert gen.tokenizer is tok
-

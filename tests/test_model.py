@@ -29,4 +29,3 @@ def test_model_forward_and_weight_tying():
     input_ids = torch.randint(0, cfg.vocab_size, (B, T))
     logits = model(input_ids)
     assert logits.shape == (B, T, cfg.vocab_size)
-

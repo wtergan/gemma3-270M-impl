@@ -10,6 +10,13 @@ modern LLM architecture patterns without depending on the Transformers library.
 - Clean generation utilities (prefill + decode) with sampling
 - Tests designed for readability and learning
 
+### Recent updates (2025-09-15)
+- Added `context_length=32,768` and generator now enforces it by windowing inputs.
+- Default `sliding_window` set to `512` (local attention span).
+- Split RoPE bases: `rope_local_theta=10_000.0` (sliding/local) and `rope_theta=1_000_000.0` (global).
+  - Global/full attention layers use `rope_theta`.
+  - Sliding/local attention layers use `rope_local_theta`.
+
 ## Install (uv recommended)
 ```bash
 # Create virtual environment
@@ -32,6 +39,40 @@ pip install -r requirements.txt
 python -c "import gemma3_text270m as g; print(g.__version__)"
 ```
 
+## Configuration
+
+`Gemma3TextConfig` is locked to the 270M variant for core architecture fields, but exposes runtime knobs:
+
+- `context_length` (int, default `32768`): maximum tokens processed; generator crops inputs to last `context_length` tokens.
+- `sliding_window` (int, default `512`): local attention span for sliding layers and default ring‑buffer KV capacity.
+- `rope_theta` (float, default `1e6`): RoPE base used by global/full attention layers.
+- `rope_local_theta` (float, default `1e4`): RoPE base used by sliding/local attention layers.
+
+Override examples:
+
+```python
+from gemma3_text270m import Gemma3TextConfig
+
+# Programmatic override
+cfg = Gemma3TextConfig(context_length=16384, sliding_window=256, rope_theta=1e6, rope_local_theta=1e4)
+
+# Or via HF-style dict (ignored keys are safe)
+hf_cfg = {
+    "vocab_size": 262_144,
+    "hidden_size": 640,
+    "intermediate_size": 2_048,
+    "num_hidden_layers": 18,
+    "num_attention_heads": 4,
+    "num_key_value_heads": 1,
+    "head_dim": 256,
+    "context_length": 32768,
+    "sliding_window": 512,
+    "rope_theta": 1_000_000.0,
+    "rope_local_theta": 10_000.0,
+}
+cfg = Gemma3TextConfig.from_hf_dict(hf_cfg)
+```
+
 ## Weight Loading & Generation
 
 Below is a minimal, end‑to‑end example that instantiates the model, loads
@@ -50,7 +91,7 @@ from gemma3_text270m import (
     load_weights_into,
 )
 
-# 1) Build config + model
+# 1) Build config + model (defaults shown under “Configuration”)
 cfg = Gemma3TextConfig()
 model = Gemma3ForCausalLM(cfg).eval()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -68,7 +109,7 @@ model.to(device)
 # tok = Gemma3Tokenizer.from_local_path("/path/to/tokenizer.json")
 tok = Gemma3Tokenizer()  # simple fallback for quick smoke; prefer real tokenizer
 
-# 4) Generate text
+# 4) Generate text (generator respects cfg.context_length)
 gen = Gemma3Generator(model, tok, device=device)
 text = gen.generate(
     "Hello, I'm a small LLM",
@@ -86,14 +127,28 @@ Tips:
 ```
  gemma3_text270m/
    __init__.py
+   attention.py
+   block.py
+   config.py
+   generate.py
+   hf_loader.py
+   kvcache.py
+   mlp.py
+   model.py
+   tokenizer.py
  tests/
-   __init__.py
+   ...
+ .vault/
+ .kanónes/
  pyproject.toml
- setup.py
- requirements.txt
+ uv.lock
  README.md
  LICENSE
 ```
+
+### Attention pattern
+- 18 layers with a 5:1 sliding:global pattern repeated 3×.
+- Sliding layers use `sliding_window` and `rope_local_theta`; global layers use full causal attention and `rope_theta`.
 
 ## Development
 - Format: `uv run black .`

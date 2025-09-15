@@ -55,4 +55,3 @@ def test_from_json_file(tmp_path: Path):
     p.write_text(json.dumps(payload), encoding="utf-8")
     cfg = Gemma3TextConfig.from_json_file(p)
     assert cfg.hidden_size == 640
-
