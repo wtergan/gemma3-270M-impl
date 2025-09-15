@@ -14,7 +14,6 @@ between HuggingFace and local naming conventions. It supports:
 - Comprehensive loading reports with mapping statistics
 
 Usage::
-
     model = Gemma3ForCausalLM(config)
     report = load_weights_into(model, "google/gemma-3-270m")
     print(report.loaded_tensors)
@@ -28,7 +27,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Pattern, Tuple, Union
-
+from .model import Gemma3ForCausalLM
 import torch
 
 try:
@@ -42,13 +41,10 @@ except Exception as e:  # pragma: no cover
     hf_hub_download = None  # type: ignore
     snapshot_download = None  # type: ignore
 
-from .model import Gemma3ForCausalLM
-
-
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
-
+# HF key regex patterns for mapping hf weight keys to local weight keys
 HF_TO_LOCAL_PATTERNS: List[Tuple[Pattern[str], str]] = [
     # Embeddings
     (re.compile(r"^model\.embed_tokens\.(.+)$"), r"embed_tokens.\1"),
@@ -76,9 +72,7 @@ HF_TO_LOCAL_PATTERNS: List[Tuple[Pattern[str], str]] = [
     (re.compile(r"^model\.(.+)$"), r"\1"),
 ]
 
-
 TRANSPOSE_PATTERNS: List[Pattern[str]] = []
-
 
 @dataclass
 class LoadReport:
@@ -92,10 +86,8 @@ class LoadReport:
     mapping_stats: Dict[str, Union[int, float]]
     transformations: Dict[str, List[str]]
 
-
 def _map_hf_key_to_local(hf_key: str) -> Tuple[str, bool]:
     """Return the local key for an HF weight key along with mapping flag."""
-
     for pattern, replacement in HF_TO_LOCAL_PATTERNS:
         if pattern.match(hf_key):
             local_key = pattern.sub(replacement, hf_key)
@@ -153,11 +145,9 @@ def _map_state_dict(
 ]:
     """
     Map HF keys to local keys, applying transforms where necessary.
-
     Returns mapped weights, missing keys, unexpected HF keys, mapping stats,
     transformation log, and shape mismatch descriptions.
     """
-
     mapped: Dict[str, torch.Tensor] = {}
     unexpected: List[str] = []
     shape_mismatches: List[str] = []
@@ -277,7 +267,6 @@ def load_weights_into(
     device: Optional[torch.device] = None,
 ) -> LoadReport:
     """Load HF safetensors into the given model.
-
     - repo_or_path: local dir with safetensors or HF repo id (e.g., 'google/gemma-3-270m')
     - strict: if True, raise on any missing/unexpected keys or shape mismatches
     - device: optional device to move loaded tensors before assignment
