@@ -81,6 +81,21 @@ def _apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.
     return (x * cos) + (_rope_rotate_half(x) * sin)
 
 
+class _HeadRMSNorm(nn.Module):
+    """RMSNorm applied across the last dimension for per-head normalization."""
+
+    def __init__(self, dim: int, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Works for inputs shaped [B, H, T, D] (or [B, K, T, D])
+        rms = x.pow(2).mean(dim=-1, keepdim=True).add(self.eps).sqrt()
+        normed = x / rms
+        return normed * self.weight.view(1, 1, 1, -1)
+
+
 @dataclass
 class _MQAParams:
     num_heads: int
@@ -117,6 +132,10 @@ class _MultiQueryAttentionBase(nn.Module):
         self.v_proj = nn.Linear(HS, K * D, bias=False)
         self.o_proj = nn.Linear(H * D, HS, bias=False)
 
+        # Per-head RMSNorm applied to query/key before RoPE (matches HF Gemma3)
+        self.q_norm = _HeadRMSNorm(D)
+        self.k_norm = _HeadRMSNorm(D)
+
         # Select RoPE base per attention type (passed by subclass)
         self.rope_theta = float(rope_theta)
 
@@ -150,16 +169,19 @@ class _MultiQueryAttentionBase(nn.Module):
         H, K, D = self.params.num_heads, self.params.num_kv, self.params.head_dim
 
         # Projection applications on x...
-        q = self.q_proj(x).view(B, T, H, D)
-        k = self.k_proj(x).view(B, T, K, D)
+        q = self.q_proj(x).view(B, T, H, D).permute(0, 2, 1, 3).contiguous()
+        k = self.k_proj(x).view(B, T, K, D).permute(0, 2, 1, 3).contiguous()
         v = self.v_proj(x).view(B, T, K, D)
 
-        # RoPE for Q/K
         device = x.device
+        q = self.q_norm(q)
+        k = self.k_norm(k)
+
+        # RoPE for Q/K
         cos, sin = _build_rope_cache(T, D, self.rope_theta, device)
         # [B,H,T,D] ; [B,K,T,D]
-        q = _apply_rope(q.permute(0, 2, 1, 3).contiguous(), cos, sin)
-        k = _apply_rope(k.permute(0, 2, 1, 3).contiguous(), cos, sin)  # treat K as heads dim=K
+        q = _apply_rope(q, cos, sin)
+        k = _apply_rope(k, cos, sin)  # treat K as head dimension
 
         # Scaled dot-product with MQA broadcasting (K/V shared across heads)
         scale = self.params.query_pre_attn_scalar

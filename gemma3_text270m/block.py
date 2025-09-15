@@ -43,7 +43,7 @@ class RMSNorm(nn.Module):
 
 
 class Gemma3Block(nn.Module):
-    """Transformer block with pre-norm attention and MLP residual paths."""
+    """Transformer block mirroring Gemma3's norm ordering."""
 
     def __init__(self, config: Gemma3TextConfig, layer_type: str = "sliding_attention"):
         super().__init__()
@@ -51,20 +51,29 @@ class Gemma3Block(nn.Module):
             raise ValueError("layer_type must be 'sliding_attention' or 'full_attention'")
 
         d_model = int(config.hidden_size)
-        self.input_norm = RMSNorm(d_model)
+        self.input_layernorm = RMSNorm(d_model)
         if layer_type == "sliding_attention":
             self.attention = SlidingWindowAttention(config)
         else:
             self.attention = GlobalAttention(config)
-        self.post_norm = RMSNorm(d_model)
+        self.post_attention_layernorm = RMSNorm(d_model)
+        self.pre_feedforward_layernorm = RMSNorm(d_model)
+        self.post_feedforward_layernorm = RMSNorm(d_model)
         self.mlp = Gemma3MLP(config)
 
     def forward(self, x: torch.Tensor, attention_mask: torch.Tensor | None = None) -> torch.Tensor:
-        # Pre-norm attention + residual
-        h = x + self.attention(self.input_norm(x), attention_mask=attention_mask)
-        # Pre-MLP norm + residual
-        out = h + self.mlp(self.post_norm(h))
-        return out
+        residual = x
+        attn_input = self.input_layernorm(x)
+        attn_out = self.attention(attn_input, attention_mask=attention_mask)
+        attn_out = self.post_attention_layernorm(attn_out)
+        x = residual + attn_out
+
+        residual = x
+        mlp_input = self.pre_feedforward_layernorm(x)
+        mlp_out = self.mlp(mlp_input)
+        mlp_out = self.post_feedforward_layernorm(mlp_out)
+        x = residual + mlp_out
+        return x
 
 
 __all__ = ["Gemma3Block", "RMSNorm"]

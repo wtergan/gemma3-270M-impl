@@ -58,11 +58,22 @@ HF_TO_LOCAL_PATTERNS: List[Tuple[Pattern[str], str]] = [
         re.compile(r"^model\.layers\.(\d+)\.mlp\.(gate_proj|up_proj|down_proj)\.(.+)$"),
         r"layers.\1.mlp.\2.\3",
     ),
+    # Attention norms
+    (re.compile(r"^model\.layers\.(\d+)\.self_attn\.q_norm\.(.+)$"), r"layers.\1.attention.q_norm.\2"),
+    (re.compile(r"^model\.layers\.(\d+)\.self_attn\.k_norm\.(.+)$"), r"layers.\1.attention.k_norm.\2"),
     # Layer norms
-    (re.compile(r"^model\.layers\.(\d+)\.input_layernorm\.(.+)$"), r"layers.\1.input_norm.\2"),
+    (re.compile(r"^model\.layers\.(\d+)\.input_layernorm\.(.+)$"), r"layers.\1.input_layernorm.\2"),
     (
         re.compile(r"^model\.layers\.(\d+)\.post_attention_layernorm\.(.+)$"),
-        r"layers.\1.post_norm.\2",
+        r"layers.\1.post_attention_layernorm.\2",
+    ),
+    (
+        re.compile(r"^model\.layers\.(\d+)\.pre_feedforward_layernorm\.(.+)$"),
+        r"layers.\1.pre_feedforward_layernorm.\2",
+    ),
+    (
+        re.compile(r"^model\.layers\.(\d+)\.post_feedforward_layernorm\.(.+)$"),
+        r"layers.\1.post_feedforward_layernorm.\2",
     ),
     # Final norm
     (re.compile(r"^model\.norm\.(.+)$"), r"norm.\1"),

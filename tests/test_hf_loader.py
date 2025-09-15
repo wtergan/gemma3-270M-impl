@@ -26,10 +26,14 @@ def _local_to_hf_key(local_key: str) -> str:
             return f"model.layers.{layer_idx}.self_attn.{'.'.join(remainder[1:])}"
         if remainder[0] == "mlp":
             return f"model.layers.{layer_idx}.mlp.{'.'.join(remainder[1:])}"
-        if remainder[0] == "input_norm":
+        if remainder[0] == "input_layernorm":
             return f"model.layers.{layer_idx}.input_layernorm.{'.'.join(remainder[1:])}"
-        if remainder[0] == "post_norm":
+        if remainder[0] == "post_attention_layernorm":
             return f"model.layers.{layer_idx}.post_attention_layernorm.{'.'.join(remainder[1:])}"
+        if remainder[0] == "pre_feedforward_layernorm":
+            return f"model.layers.{layer_idx}.pre_feedforward_layernorm.{'.'.join(remainder[1:])}"
+        if remainder[0] == "post_feedforward_layernorm":
+            return f"model.layers.{layer_idx}.post_feedforward_layernorm.{'.'.join(remainder[1:])}"
 
     if local_key.startswith("norm."):
         return f"model.norm.{local_key.split('.', 1)[1]}"
@@ -45,8 +49,12 @@ def test_map_hf_key_to_local_patterns():
         "model.embed_tokens.weight": "embed_tokens.weight",
         "model.layers.0.self_attn.q_proj.weight": "layers.0.attention.q_proj.weight",
         "model.layers.11.mlp.down_proj.weight": "layers.11.mlp.down_proj.weight",
-        "model.layers.5.input_layernorm.weight": "layers.5.input_norm.weight",
-        "model.layers.17.post_attention_layernorm.weight": "layers.17.post_norm.weight",
+        "model.layers.5.input_layernorm.weight": "layers.5.input_layernorm.weight",
+        "model.layers.17.post_attention_layernorm.weight": "layers.17.post_attention_layernorm.weight",
+        "model.layers.4.pre_feedforward_layernorm.weight": "layers.4.pre_feedforward_layernorm.weight",
+        "model.layers.4.post_feedforward_layernorm.weight": "layers.4.post_feedforward_layernorm.weight",
+        "model.layers.9.self_attn.q_norm.weight": "layers.9.attention.q_norm.weight",
+        "model.layers.9.self_attn.k_norm.weight": "layers.9.attention.k_norm.weight",
         "model.norm.weight": "norm.weight",
         "lm_head.weight": "lm_head.weight",
     }
