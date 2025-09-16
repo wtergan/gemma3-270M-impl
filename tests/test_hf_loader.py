@@ -107,6 +107,31 @@ def test_weight_loading_with_mapping(tmp_path: Path):
     assert report.transformations == {}
 
 
+def test_weight_loading_with_tied_lm_head(tmp_path: Path):
+    config = Gemma3TextConfig()
+    model = Gemma3ForCausalLM(config)
+
+    hf_state = {}
+    for local_key, tensor in model.state_dict().items():
+        hf_key = _local_to_hf_key(local_key)
+        if hf_key == "lm_head.weight":
+            continue  # simulate checkpoint without explicit lm_head copy
+        hf_state[hf_key] = tensor.detach().clone()
+
+    fake_root = tmp_path / "repo"
+    fake_file = fake_root / "model.safetensors"
+
+    with patch("gemma3_text270m.hf_loader._load_safetensors", return_value=hf_state), patch(
+        "gemma3_text270m.hf_loader._detect_files",
+        return_value=(fake_root, [fake_file]),
+    ):
+        report = load_weights_into(model, "google/gemma-3-270m", strict=False)
+
+    assert report.missing_keys == []
+    assert report.mapping_stats["successfully_mapped"] == len(hf_state)
+    assert report.transformations.get("lm_head.weight") == ["alias(embed_tokens.weight)"]
+
+
 def test_local_detection_and_partial_load(tmp_path: Path):
     # Create a mock local repo with a minimal safetensors-like structure using torch.save fallback
     # Here we avoid actually writing safetensors; this is a structural test only.

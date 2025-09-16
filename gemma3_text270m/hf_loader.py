@@ -85,6 +85,13 @@ HF_TO_LOCAL_PATTERNS: List[Tuple[Pattern[str], str]] = [
 
 TRANSPOSE_PATTERNS: List[Pattern[str]] = []
 
+# Keys that are tied together in the local model; when the alias key is missing
+# but its target key is loaded we consider it satisfied because both reference
+# the same nn.Parameter instance (e.g., LM head tied to embeddings).
+TIED_WEIGHT_ALIASES: Dict[str, str] = {
+    "lm_head.weight": "embed_tokens.weight",
+}
+
 @dataclass
 class LoadReport:
     repo_or_path: str
@@ -296,6 +303,26 @@ def load_weights_into(
 
     missing_sorted = sorted(set(missing))
     unexpected_sorted = sorted(set(unexpected))
+
+    # Resolve tied weights that deliberately alias loaded parameters (e.g.,
+    # lm_head.weight shares storage with embed_tokens.weight).
+    if missing_sorted:
+        missing_set = set(missing_sorted)
+        named_params = dict(model.named_parameters(remove_duplicate=False))
+        for alias_key, target_key in TIED_WEIGHT_ALIASES.items():
+            if alias_key not in missing_set or target_key not in mapped:
+                continue
+
+            alias_param = named_params.get(alias_key)
+            target_param = named_params.get(target_key)
+            if alias_param is None or target_param is None:
+                continue
+
+            if alias_param is target_param:
+                missing_set.remove(alias_key)
+                transformations.setdefault(alias_key, []).append(f"alias({target_key})")
+
+        missing_sorted = sorted(missing_set)
 
     if strict and (missing_sorted or unexpected_sorted or shape_mismatches):
         raise RuntimeError(_format_strict_error(missing_sorted, unexpected_sorted, shape_mismatches))
