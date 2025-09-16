@@ -73,9 +73,10 @@ def _search_tokenizer_file(path: Path) -> Tuple[Optional[Path], Optional[str]]:
         json_path = path / "tokenizer.json"
         if _is_json_tokenizer_path(json_path):
             return json_path, "hf_tokenizers"
-        spm_path = path / "spiece.model"
-        if _is_spm_model_path(spm_path):
-            return spm_path, "sentencepiece"
+        for spm_name in ["tokenizer.model", "spiece.model"]:
+            spm_path = path / spm_name
+            if _is_spm_model_path(spm_path):
+                return spm_path, "sentencepiece"
     return None, None
 
 
@@ -133,6 +134,7 @@ class Gemma3Tokenizer:
         candidate_filenames = [
             filename,
             "tokenizer.json",
+            "tokenizer.model",
             "spiece.model",
         ]
         last_err: Optional[Exception] = None

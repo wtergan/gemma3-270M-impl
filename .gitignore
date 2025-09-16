@@ -3,6 +3,8 @@
 .vault/
 tools/
 AGENTS.md
+.claude/
+opencode.json
 
 # Python
 __pycache__/

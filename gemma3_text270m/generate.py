@@ -38,6 +38,7 @@ def _sample_logits(
         k = min(top_k, probs.numel())
         vals, idx = torch.topk(probs, k)
         mask = torch.full_like(probs, float("-inf"))
+        # log of the top-k probs, -inf elsewhere 
         mask[idx] = torch.log(vals)
         probs = F.softmax(mask, dim=-1)
 
@@ -55,6 +56,7 @@ def _sample_logits(
         probs = torch.zeros_like(probs)
         probs[sorted_idx] = F.softmax(filtered, dim=-1)
 
+    # Sample from the filtered distribution
     next_id = torch.multinomial(probs, num_samples=1)
     return int(next_id.item())
 
