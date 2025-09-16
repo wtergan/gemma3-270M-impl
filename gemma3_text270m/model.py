@@ -4,8 +4,9 @@ from __future__ import annotations
 Gemma3ForCausalLM model assembly (educational).
 
 Assembles embeddings, 18 transformer blocks with a 5:1 sliding:global pattern
-repeated 3 times, final RMSNorm, and a standalone LM head (not weight-tied to
-the embeddings to stay compatible with official HuggingFace checkpoints).
+repeated 3 times, final RMSNorm, and an LM head weight-tied to the token
+embedding matrix—mirroring the official Gemma-3 implementation so generation
+uses the exact same parameters for projecting to logits.
 
 Forward implements prefill-style processing over full input sequences.
 """
@@ -42,6 +43,9 @@ class Gemma3ForCausalLM(nn.Module):
         self.layers = nn.ModuleList([Gemma3Block(config, layer_type=lt) for lt in layer_types])
         self.norm = RMSNorm(D)
         self.lm_head = nn.Linear(D, V, bias=False)
+        # Gemma-3 ties the LM projection to the token embeddings so we reuse the
+        # exact parameter tensor instead of keeping an independent copy.
+        self.lm_head.weight = self.embed_tokens.weight
 
     def forward(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None
